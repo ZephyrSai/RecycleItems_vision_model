@@ -16,7 +16,7 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "public")));
 
 // LM Studio local server (from your logs)
-const LM_BASE = "http://192.168.56.1:1234/v1";
+const LM_BASE = "http://localhost:1234/v1";
 const MODEL = process.env.LM_MODEL || "google/gemma-3-4b"; // set to the exact Gemma 3 Vision ID
 
 // Per-visitor in-memory sessions
@@ -38,7 +38,7 @@ function appendAssistant(state, text) {
 
 // Fixed instruction appended for every image request
 const INSTRUCTION_TEXT =
-  "look for recyclable items in the image provided. if any item is recyclable then first give a writeup about how it can be recycled. also include ways in which it can be reused if you find the object to be in good condition. also if there are multiple objects then you can list their recycle uses one after another. after that just print a json in a specific format like object: plastic; recycle: true, object: aluminium; recycle: true and so on. if the image is out of context just say 'out of context' ";
+  "look for recyclable items in the image provided. if any item is recyclable then first give a writeup about how it can be recycled but stick to methods that can be done at home or its easy. also include ways in which it can be reused if you find the object to be in good condition but again stick to scopes that can be useful around the household or easily accessible places, you can also include ways in which it can be used as items for handicrafts, or similar things that high school children find interesting; give ideas. also if there are multiple objects then you can list their recycle uses one after another. after that just print a json in a specific format like object: plastic; recycle: true, object: aluminium; recycle: true and so on. if the image is out of context just say 'out of context'. dont give me replies that like a markdown, instead keep it to plain text. pls give me the reply in ARABIC.";
 
 app.post("/api/chat", async (req, res) => {
   const { state } = getOrCreateSession(req, res);
