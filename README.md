@@ -20,7 +20,7 @@ A minimal Node.js web app that streams responses from an LM Studio local server 
 1. Install LM Studio and launch it.
 2. Download a Gemma 3 model in LM Studio’s model browser. For image inputs, ensure a Vision-capable Gemma 3 variant is downloaded. Current model used is "google/gemma-3-4b". Change the model reference accordingly.
 3. Start the LM Studio local server (from the Developer tab or CLI) and note the base URL (for example, http://localhost:1234/v1 or http://<LAN-IP>:1234/v1).
-4. Open server.js and set LM_BASE to the correct LM Studio base URL:
+4. Open server.js and set LM_BASE to the correct LM Studio base URL if LMStudio isn't running on the same machine:
 
 ```js
 // server.js
@@ -76,6 +76,6 @@ app.use(express.static(path.join(__dirname, "public")));
 .
 ├─ package.json
 ├─ server.js
-├─ index.html          # move to ./public or update express.static path
 └─ public/             # static assets served from here (create if needed)
+    └─ index.html          # move to ./public or update express.static path
 ```
