@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Recyclables Checker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; background: #0b0f19; color: #e6e6e6; }
+      header { padding: 12px 16px; background: #121828; border-bottom: 1px solid #1e2940; }
+      #chat { padding: 16px; max-width: 900px; margin: 0 auto; }
+      .msg { padding: 10px 12px; margin: 10px 0; border-radius: 8px; white-space: pre-wrap; }
+      .user { background: #1e2a44; }
+      .assistant { background: #162036; }
+      .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      button { padding: 10px 14px; background: #2c7be5; color: white; border: 0; border-radius: 6px; cursor: pointer; }
+      #hiddenFile { display: none; }
+      img.preview { max-width: 260px; border: 1px solid #2a3554; border-radius: 6px; }
+      canvas { display:none; }
+    </style>
+  </head>
+  <body>
+    <header>Recyclables Checker</header>
+    <div id="chat"></div>
+
+    <section style="padding:16px; max-width:900px; margin:0 auto;">
+      <div class="row" style="margin-bottom:8px;">
+        <!-- Hidden native file input; triggered by the Snap It button -->
+        <input id="hiddenFile" type="file" accept="image/*" capture="environment" />
+        <button id="pick">Snap It</button>
+        <button id="send" disabled>Send</button>
+      </div>
+
+      <div class="row">
+        <img id="preview" class="preview" alt="" />
+      </div>
+
+      <canvas id="work"></canvas>
+    </section>
+
+    <script>
+      const chat = document.getElementById("chat");
+      const pickBtn = document.getElementById("pick");
+      const sendBtn = document.getElementById("send");
+      const file = document.getElementById("hiddenFile");
+      const preview = document.getElementById("preview");
+      const canvas = document.getElementById("work");
+
+      let currentImageData = null;
+
+      function addMsg(text, who = "assistant", imgData) {
+        const div = document.createElement("div");
+        div.className = "msg " + (who === "user" ? "user" : "assistant");
+        div.textContent = text || "";
+        if (imgData) {
+          const img = document.createElement("img");
+          img.src = imgData;
+          img.className = "preview";
+          div.appendChild(document.createElement("br"));
+          div.appendChild(img);
+        }
+        chat.appendChild(div);
+        div.scrollIntoView({ behavior: "smooth", block: "end" });
+        return div;
+      }
+
+      pickBtn.addEventListener("click", () => file.click());
+
+      // Robust file selection: read, downscale if needed, normalize to JPEG
+      file.addEventListener("change", async () => {
+        const f = file.files?.[0];
+        if (!f) return;
+
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () => reject(reader.error);
+          reader.onload = () => resolve(reader.result);
+          reader.readAsDataURL(f);
+        });
+
+        const img = new Image();
+        img.src = dataUrl;
+        await img.decode();
+
+        const MAX_DIM = 1600;
+        const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+
+        currentImageData = canvas.toDataURL("image/jpeg", 0.85);
+        preview.src = currentImageData;
+        sendBtn.disabled = !currentImageData;
+      });
+
+      // Send image (instruction text is injected server-side; not shown in the chat)
+      sendBtn.addEventListener("click", async () => {
+        if (!currentImageData) return;
+
+        // Show only the image for the user message
+        addMsg("(image)", "user", currentImageData);
+
+        const resp = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageDataUrl: currentImageData }),
+        });
+
+        // Reset local state for next upload
+        currentImageData = null;
+        preview.src = "";
+        sendBtn.disabled = true;
+
+        // Stream the assistant reply
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let assistantDiv = addMsg("");
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          for (const frame of chunk.split("\n\n")) {
+            const line = frame.trim();
+            if (!line.startsWith("data:")) continue;
+            const payload = line.slice(5).trim();
+            if (payload === "[DONE]") break;
+            try {
+              const evt = JSON.parse(payload);
+              if (evt.delta) assistantDiv.textContent += evt.delta;
+            } catch {}
+          }
+        }
+      });
+    </script>
+  </body>
+</html>
